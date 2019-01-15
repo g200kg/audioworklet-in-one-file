@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<body>
+<h3>Load AudioWorklet processor from class object</h3>
+<a href="https://github.com/g200kg/audioworklet-in-one-file">GitHub Repository</a><br/><br/>
+<audio id="soundsrc" src="./loop.wav" controls loop></audio><br/>
+Drive : <input id="drive" type="range" min="0" max="1" step="0.01" value="0"/><br/>
+
+<script>
+// Register Class as an AudioWorklet Processor
+class AudioWorkletProcessor{}
+function addAudioWorklet(context, proc){
+    var f=`data:text/javascript,${encodeURI(proc.toString())};
+            registerProcessor("${proc.name}",${proc.name})`;
+    return context.audioWorklet.addModule(f);
+}
+
+// AudioWorklet Processor Class
+class OverDrive extends AudioWorkletProcessor {
+    static get parameterDescriptors () {
+        return [{
+            name: 'drive',
+            defaultValue: 0,
+            minValue: 0,
+            maxValue: 1,
+            automationRate: "k-rate"
+        }];
+    }
+    process (inputs, outputs, parameters) {
+        let input = inputs[0];
+        let output = outputs[0];
+        let drv = Math.pow(0.05,Math.abs(parameters.drive[0]));
+        for (let channel = 0; channel < output.length; ++channel) {
+            for (let i = 0; i < output[channel].length; ++i) {
+                var d=input[channel][i];
+                if(d<0)
+                    output[channel][i]=-Math.pow(-d,drv);
+                else
+                    output[channel][i]=Math.pow(d,drv);
+            }
+        }
+        return true;
+    }
+}
+
+// Main Program
+window.onload = (async ()=>{
+    audioctx = new AudioContext();
+    await addAudioWorklet(audioctx, OverDrive);
+    const src = new MediaElementAudioSourceNode(
+        audioctx,{mediaElement:document.getElementById('soundsrc')}
+    );
+    const overdrive = new AudioWorkletNode(audioctx, 'OverDrive');
+    const paramDrive = overdrive.parameters.get('drive');
+    src.connect(overdrive).connect(audioctx.destination);
+
+    document.getElementById("drive").addEventListener("input",(ev)=>{
+        audioctx.resume();
+        paramDrive.value=ev.target.value;
+    })
+});
+</script>
+</body>
+</html>
